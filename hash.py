@@ -14,10 +14,7 @@ def create_hash_file(file_path, hash_value):
     try:
         filename, _ = os.path.splitext(file_path)
         hash_filename = f"{filename}.hash"
-        stats = os.stat(file_path)
-        creation_time = stats.st_ctime
-        modification_time = stats.st_mtime
-        full_hash = hashlib.sha3_512(str(file_path).encode() + str(hash_value).encode() + str(modification_time).encode()).hexdigest()
+        full_hash = hashlib.sha3_512(str(file_path).encode() + str(hash_value).encode()).hexdigest()
         with open(hash_filename, 'w') as hash_file:
             hash_file.write(f"{file_path}\n{hash_value}\n{full_hash}")
         print(f'Hash created: {hash_filename}')
@@ -32,9 +29,7 @@ def verify_hash_file(hash_filename):
             file_path = lines[0].strip()
             stored_hash_value = lines[1].strip()
             stored_full_hash = lines[2].strip()
-            stats = os.stat(file_path)
-            modification_time = stats.st_mtime
-            full_hash = hashlib.sha3_512(str(file_path).encode() + stored_hash_value.encode() + str(modification_time).encode()).hexdigest()
+            full_hash = hashlib.sha3_512(str(file_path).encode() + stored_hash_value.encode()).hexdigest()
             if full_hash == stored_full_hash:
                 current_hash_value = compute_file_hash(file_path)
                 if current_hash_value == stored_hash_value:
