@@ -1,70 +1,114 @@
-import os, hashlib, zlib, sys
-
+# Author:dotslashCosmic
+import os, hashlib, zlib, random, time
+art = """
+COSMIC@' '@@@'   '''     '@''     ''         ''   '@@@'
+HASH '@ '@' '@ '@@'@@@' '@      '@@@@''   '@@'@@ '@' '@
+96   '@'@'    '@'    '@''@@@@@ '@  '@@@@' '   '@'@'
+    '@ '@'    '@      @'    @''@   '@  '@'   '@ '@'
+ '  '@ '@'     @'   '@'   '@  @'   '@   '@  '@  '@
+'' '@'  '@@''' ''@@@@'    ''  @'   ''   '@  '@   '@@'''
+"""
 def compute_file_hash(file_path):
     try:
+        blake2b_hash = hashlib.blake2b(digest_size=20)
+        sha3_512_hash = hashlib.sha3_512()
         with open(file_path, 'rb') as file:
-            content = file.read()
-            crc32_hash = zlib.crc32(content)
-            sha3_512_hash = hashlib.sha3_512(content + crc32_hash.to_bytes((crc32_hash.bit_length() + 7) // 8, 'big')).hexdigest()
-            return sha3_512_hash
+            while True:
+                chunk = file.read(4096)
+                if not chunk:
+                    break
+                blake2b_hash.update(chunk)
+                sha3_512_hash.update(chunk)
+        return blake2b_hash, sha3_512_hash.hexdigest()
     except FileNotFoundError:
-        return None
+        print(f"File not found: {file_path}")
+        return None, None
 
-def create_hash_file(file_path, hash_value):
+def create_hash_file(file_path, blake2b_hash, sha3_512_hash):
     try:
-        filename, _ = os.path.splitext(file_path)
-        hash_filename = f"{filename}.hash"
-        full_hash = hashlib.sha3_512(str(file_path).encode() + str(hash_value).encode()).hexdigest()
+        hash_filename = f"{file_path}.hash"
+        author = input("Enter author name: ")
+        salt = ''.join(filter(lambda x: x not in '@ ', art.split('\n')[1][6:16]))
+        sign = hashlib.sha3_512((author + salt).encode()).hexdigest()[:-5]
+        cosmichash = list(art)
+        cosmichash[14] = sign[0]
+        cosmichash[20] = sign[1]
+        cosmichash[26] = sign[2]
+        cosmichash[29] = sign[3]
+        cosmichash[47] = sign[4]
+        period_count = 0
+        hash_index = 1
+        for i in range(len(cosmichash)):
+            if cosmichash[i] == "'":
+                period_count += 1
+                if period_count % 1 == 0:
+                    cosmichash[i] = sha3_512_hash[hash_index % len(sha3_512_hash)]
+                    hash_index += 3
+        for i in range(len(cosmichash) - 1, len(cosmichash)):
+            cosmichash[i] = sign[hash_index % len(sign)]
         with open(hash_filename, 'w') as hash_file:
-            hash_file.write(f"{file_path}\n{hash_value}\n{full_hash}")
-        print(f'Hash created: {hash_filename}')
-        sys.exit(1)
+            hash_file.write(author + ''.join(cosmichash))
+        print(f'Hash created: {hash_filename}\n{author}', ''.join(cosmichash))
     except Exception as e:
-        return f'Error during file creation: {str(e)}'
-
-def verify_hash_file(hash_filename):
+        print(f'Error during file creation: {str(e)}')
+        
+def validate_hash(file_path):
     try:
+        hash_filename = f"{file_path}.hash"
         with open(hash_filename, 'r') as hash_file:
             lines = hash_file.readlines()
-            file_path = lines[0].strip()
-            stored_hash_value = lines[1].strip()
-            stored_full_hash = lines[2].strip()
-            full_hash = hashlib.sha3_512(str(file_path).encode() + stored_hash_value.encode()).hexdigest()
-            if full_hash == stored_full_hash:
-                current_hash_value = compute_file_hash(file_path)
-                if current_hash_value == stored_hash_value:
-                    print(f'Hash verified: {hash_filename}')
-                    sys.exit(1)
-                else:
-                    print(f'Hash mismatch for file: {file_path}')
-                    sys.exit(1)
-            else:
-                print(f'Hash mismatch for hash file: {hash_filename}')
-                sys.exit(1)
-    except FileNotFoundError:
-        print(f'Hash file not found: {hash_filename}')
-        sys.exit(1)
-    except Exception as e:
-        print(f'Error during verification: {str(e)}')
-        sys.exit(1)
-        
-if __name__ == '__main__':
-    while True:
-        choice = input("Enter 'c' to create hash, 'v' to verify hash, or 'q' to quit: ")
-        if choice == 'c':
-            file_path = input('Enter a file path: ')
-            hash_value = compute_file_hash(file_path)
-            if hash_value is not None:
-                create_hash_file(file_path, hash_value)
-            else:
-                print('File not found.')
-                sys.exit(1)
-        elif choice == 'v':
-            filename = input('Enter the hash file path: ')
-            filename, _ = os.path.splitext(filename)
-            hash_filename = f"{filename}.hash"
-            verify_hash_file(hash_filename)
-        elif choice == 'q':
-            break
+            author = lines[0].strip()
+            stored_hash = ''.join(lines[1:]).strip()
+        blake2b_hash, sha3_512_hash = compute_file_hash(file_path)
+        if blake2b_hash is None or sha3_512_hash is None:
+            print("File not found or unable to compute hash.")
+            return
+        salt = ''.join(filter(lambda x: x not in '@ ', art.split('\n')[1][6:16]))
+        sign = hashlib.sha3_512((author + salt).encode()).hexdigest()[:-5]
+        cosmichash = list(art)
+        cosmichash[14] = sign[0]
+        cosmichash[20] = sign[1]
+        cosmichash[26] = sign[2]
+        cosmichash[29] = sign[3]
+        cosmichash[47] = sign[4]
+        period_count = 0
+        hash_index = 1
+        for i in range(len(cosmichash)):
+            if cosmichash[i] == "'":
+                period_count += 1
+                if period_count % 1 == 0:
+                    cosmichash[i] = sha3_512_hash[hash_index % len(sha3_512_hash)]
+                    hash_index += 3
+        for i in range(len(cosmichash) - 1, len(cosmichash)):
+            cosmichash[i] = sign[hash_index % len(sign)]
+        generated_hash = author + ''.join(cosmichash)
+        h1 = "".join(generated_hash)
+        h2 = "".join(lines)
+        if h1 == h2:
+            print("Hash is valid.")
         else:
-            print("Invalid choice. Please enter 'c', 'v', or 'q'.")
+            print("Hash is invalid.")
+    except Exception as e:
+        print(f'Error during validation: {str(e)}')
+        
+def main():
+    while True:
+        try:
+            choice = input("Enter 'c' to create hash, 'v' to verify hash, or 'q' to quit: ")
+            if choice == 'c':
+                file_path = input('Enter a file name: ')
+                blake2b_hash, sha3_512_hash = compute_file_hash(file_path)
+                if blake2b_hash is not None and sha3_512_hash is not None:
+                    create_hash_file(file_path, blake2b_hash, sha3_512_hash)
+            elif choice == 'v':
+                filename = input('Enter the original file name: ')
+                validate_hash(f'{filename}')
+            elif choice == 'q':
+                break
+            else:
+                print("Invalid choice. Please enter 'c', 'v', or 'q'.")
+        except Exception as e:
+            print(f'Error: {str(e)}')
+
+if __name__ == '__main__':
+    main()
